@@ -1,41 +1,59 @@
 #include "mainwindow.h"
-#include "./ui_mainwindow.h"
-#include <QDebug>
-#include <cmath>  // 确保使用正确的数学库
+#include "ui_mainwindow.h"
+#include "aboutdialog.h"
+#include "searchdialog.h"
+#include "replacedialog.h"
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QTextStream>
+#include <QColorDialog>
+#include <QFontDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
-    , operand("0")  // 初始化显示为0
 {
     ui->setupUi(this);
 
-    // 数字按钮连接
-    connect(ui->btnNum0, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum1, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum2, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum3, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum4, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum5, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum6, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum7, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum8, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
-    connect(ui->btnNum9, &QPushButton::clicked, this, &MainWindow::btnNumClicked);
+    textChanged = false;
+    on_actionNew_triggered();
 
-    // 双目运算符连接
-    connect(ui->btnPlus, &QPushButton::clicked, this, &MainWindow::btnBinaryOperatorClicked);
-    connect(ui->btnMinus, &QPushButton::clicked, this, &MainWindow::btnBinaryOperatorClicked);
-    connect(ui->btnMultiple, &QPushButton::clicked, this, &MainWindow::btnBinaryOperatorClicked);
-    connect(ui->btnDivide, &QPushButton::clicked, this, &MainWindow::btnBinaryOperatorClicked);
+    statusLabel.setMaximumWidth(180);
+    statusLabel.setText("length: " + QString::number(0) + "    lines: " + QString::number(1));
+    ui->statusbar->addPermanentWidget(&statusLabel);
 
-    // 单目运算符连接
-    connect(ui->btnPercentage, &QPushButton::clicked, this, &MainWindow::btnUnaryOperatorClicked);
-    connect(ui->btnInverse, &QPushButton::clicked, this, &MainWindow::btnUnaryOperatorClicked);
-    connect(ui->btnSquare, &QPushButton::clicked, this, &MainWindow::btnUnaryOperatorClicked);
-    connect(ui->btnSqrt, &QPushButton::clicked, this, &MainWindow::btnUnaryOperatorClicked);
+    statusCursorLabel.setMaximumWidth(180);
+    statusCursorLabel.setText("LN: " + QString::number(0) + "    Col: " + QString::number(1));
+    ui->statusbar->addPermanentWidget(&statusCursorLabel);
 
-    // 初始化显示
-    ui->display->setText(operand);
+    QLabel *author = new QLabel(ui->statusbar);
+    author->setText(tr("刘宇鹏"));
+    ui->statusbar->addPermanentWidget(author);
+
+    ui->actionUndo->setEnabled(false);
+    ui->actionRedo->setEnabled(false);
+    ui->actionCopy->setEnabled(false);
+    ui->actionCut->setEnabled(false);
+    ui->actionPaste->setEnabled(false);
+
+    QPlainTextEdit::LineWrapMode mode = ui->textEdit->lineWrapMode();
+
+    if( mode == QTextEdit::NoWrap ){
+        ui->textEdit->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+
+        ui->actionLineWrap->setChecked(false);
+    }else{
+        ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
+
+        ui->actionLineWrap->setChecked(true);
+    }
+
+    ui->actionStatusbar->setChecked(true);
+    ui->actionToolbar->setChecked(true);
+    ui->actionDisplayLineNumber->setChecked(false);
+    on_actionDisplayLineNumber_triggered(false);
+
+    connect(ui->actionDisplayLineNumber, SIGNAL(trigged(bool)), ui->textEdit, SLOT(hideLineNumberArea(bool)));
 }
 
 MainWindow::~MainWindow()
@@ -43,182 +61,315 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-// 核心计算函数
-QString MainWindow::calculation(bool *ok)
+void MainWindow::on_actionAbout_triggered()
 {
-    double result = 0;
-    if (ok) *ok = false;
-    // 处理双目运算
-    if (operands.size() >= 2 && !opcodes.isEmpty()) {
-        double operand1 = operands[0].toDouble();
-        double operand2 = operands[1].toDouble();
-        QString op = opcodes[0];
-
-        // 执行运算
-        if (op == "+") {
-            result = operand1 + operand2;
-        } else if (op == "-") {
-            result = operand1 - operand2;
-        } else if (op == "*") {
-            result = operand1 * operand2;
-        } else if (op == "/") {
-            if (qFuzzyCompare(operand2, 0.0)) {
-                ui->statusbar->showMessage("错误：除数不能为0");
-                return "错误";
-            }
-            result = operand1 / operand2;
-        }
-
-        // 清理并保存结果
-        operands.clear();
-        opcodes.clear();
-        operands.push_back(QString::number(result));
-        if (ok) *ok = true;
-    }
-    // 处理单操作数情况
-    else if (operands.size() == 1 && opcodes.isEmpty()) {
-        result = operands[0].toDouble();
-        if (ok) *ok = true;
-    } else {
-        ui->statusbar->showMessage("计算状态错误");
-        return "错误";
-    }
-
-    return QString::number(result, 'g', 10);
+    AboutDialog dlg;
+    dlg.exec();
 }
 
-// 数字按钮处理
-void MainWindow::btnNumClicked()
-{
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn) return;
 
-    QString digit = btn->text();
-    // 清除初始0
-    if (operand == "0" && digit != ".") {
-        operand.clear();
-    }
-    operand += digit;
-    ui->display->setText(operand);
+void MainWindow::on_actionFind_triggered()
+{
+    SearchDialog dlg(this, ui->textEdit);
+    dlg.exec();
 }
 
-// 双目运算符处理（+、-、*、/）
-void MainWindow::btnBinaryOperatorClicked()
+
+
+void MainWindow::on_actionReplace_triggered()
 {
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn) return;
-
-    // 保存当前操作数
-    if (operand != "0" && !operand.isEmpty()) {
-        operands.push_back(operand);
-    }
-
-    // 如果已有两个操作数，先计算
-    if (operands.size() >= 2) {
-        bool ok;
-        QString res = calculation(&ok);
-        if (ok) {
-            ui->display->setText(res);
-            operand = res;
-        }
-    }
-
-    // 保存当前运算符
-    QString op = btn->text();
-    // 确保乘号按钮文本正确映射为"*"
-    if (op == "×" || op == "x" || op == "*") {
-        opcodes.push_back("*");
-    } else {
-        opcodes.push_back(op);
-    }
-
-    operand.clear();
+    ReplaceDialog dlg(this, ui->textEdit);
+    dlg.exec();
 }
 
-// 单目运算符处理（%、1/x、x^2、√）
-void MainWindow::btnUnaryOperatorClicked()
+
+void MainWindow::on_actionNew_triggered()
 {
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn || operand.isEmpty() || operand == "0") return;
+    if(!uesrEditorConfirmed())
+        return;
 
-    double result = operand.toDouble();
-    QString op = btn->text();
+    filePath = " ";
+    ui->textEdit->clear();
+    this->setWindowTitle(tr("新建文本文件 - 编辑器"));
 
-    // 适配x^2（平方根）和√（开根号）
-    if (op == "x^2") {
-        result = result * result;
-    } else if (op == "√") {
-        if (result < 0) {
-            ui->statusbar->showMessage("错误：不能对负数开根号");
-            ui->display->setText("错误");
-            operand = "0";
+    textChanged = false;
+}
+
+
+void MainWindow::on_actionOpen_triggered()
+{
+    if(!uesrEditorConfirmed())
+        return;
+    QString filename = QFileDialog::getOpenFileName(this, "打开文件", ".",tr("Text files (*.txt) ;; All (*.*)"));
+    QFile file(filename);
+
+    if(!file.open(QFile::ReadOnly | QFile::Text)){
+        QMessageBox::warning(this, "..", "打开文件失败");
+        return;
+    }
+
+    filePath = filename;
+
+    QTextStream in(&file);
+    QString text = in.readAll();
+    ui->textEdit->insertPlainText(text);
+    file.close();
+
+    this->setWindowTitle(QFileInfo(filename).absoluteFilePath());
+
+    textChanged = false;
+
+}
+
+
+void MainWindow::on_actionSave_triggered()
+{
+    if(filePath == " "){
+        QString filename = QFileDialog::getSaveFileName(this, "保存文件", ".",tr("Text files (*.txt) "));
+
+        QFile file(filename);
+        if(!file.open(QFile::WriteOnly | QFile::Text)){
+            QMessageBox::warning(this, "..", "打开保存文件失败");
             return;
         }
-        result = sqrt(result);
-    } else if (op == "%") {
-        result /= 100.0;
-    } else if (op == "1/x") {
-        if (qFuzzyCompare(result, 0.0)) {
-            ui->statusbar->showMessage("错误：0没有倒数");
-            ui->display->setText("错误");
-            operand = "0";
-            return;
+        file.close();
+        filePath = filename;
+    }
+
+    QFile file(filePath);
+
+    if(!file.open(QFile::WriteOnly | QFile::Text)){
+        QMessageBox::warning(this, "..", "打开保存文件失败");
+        return;
+    }
+
+    QTextStream out(&file);
+    QString text = ui->textEdit->toPlainText();
+    out <<text;
+    file.flush();
+    file.close();
+
+    this->setWindowTitle(QFileInfo(filePath).absoluteFilePath());
+
+    textChanged = false;
+}
+
+void MainWindow::on_actionSaveAs_triggered()
+{
+    QString filename = QFileDialog::getSaveFileName(this, "保存文件", ".",tr("Text files (*.txt) "));
+
+    QFile file(filename);
+    if(!file.open(QFile::WriteOnly | QFile::Text)){
+        QMessageBox::warning(this, "..", "打开保存文件失败");
+        return;
+    }
+    filePath = filename;
+    QTextStream out(&file);
+    QString text = ui->textEdit->toPlainText();
+    out <<text;
+    file.flush();
+    file.close();
+
+    this->setWindowTitle(QFileInfo(filePath).absoluteFilePath());
+}
+
+
+void MainWindow::on_textEdit_textChanged()
+{
+    if (!textChanged) {
+        this->setWindowTitle("*" + this->windowTitle());
+        textChanged = true;
+    }
+
+    statusLabel.setText("length: " + QString::number(ui->textEdit->toPlainText().length()) +
+                        "    lines: " +
+                        QString::number(ui->textEdit->document()->lineCount()));
+}
+
+bool MainWindow::uesrEditorConfirmed()
+{
+    if(textChanged){
+
+        QString path = (filePath != " ") ? filePath : "无标题.txt";
+
+        QMessageBox msg(this);
+        msg.setIcon(QMessageBox::Question);
+        msg.setWindowTitle("...");
+        msg.setWindowFlag(Qt::Drawer);
+        msg.setText(QString("是否将更改保存到\n") + "\"" + path + "\" ?");
+        msg.setStandardButtons(QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        int r = msg.exec();
+        switch ( r ) {
+        case QMessageBox::Yes:
+            on_actionSave_triggered();
+            break;
+        case QMessageBox::No:
+            textChanged = false;
+            break;
+        case QMessageBox::Cancel:
+            return false;
         }
-        result = 1.0 / result;
     }
 
-    // 更新显示
-    operand = QString::number(result, 'g', 10);
-    ui->display->setText(operand);
+    return true;
+
 }
 
 
-// 小数点处理
-void MainWindow::on_btnPeriod_clicked()
+
+void MainWindow::on_actionUndo_triggered()
 {
-    if (!operand.contains(".")) {
-        if (operand.isEmpty()) operand = "0";
-        operand += ".";
-        ui->display->setText(operand);
-    }
+    ui->textEdit->undo();
 }
 
-// 退格处理
-void MainWindow::on_btnDel_clicked()
+
+void MainWindow::on_actionCut_triggered()
 {
-    if (operand.length() <= 1) {
-        operand = "0";
-    } else {
-        operand.chop(1);
-    }
-    ui->display->setText(operand);
+    ui->textEdit->cut();
+    ui->actionPaste->setEnabled(true);
 }
 
-// 清除所有（AC）
-void MainWindow::on_btnClear_clicked()
+
+void MainWindow::on_actionCopy_triggered()
 {
-    operand = "0";
-    operands.clear();
-    opcodes.clear();
-    ui->display->setText(operand);
+    ui->textEdit->copy();
+    ui->actionPaste->setEnabled(true);
 }
 
-// 等于号处理
-void MainWindow::on_btnEqual_clicked()
+
+void MainWindow::on_actionPaste_triggered()
 {
-    if (operand != "0" && !operand.isEmpty()) {
-        operands.push_back(operand);
-    }
+    ui->textEdit->paste();
+}
 
-    bool ok;
-    QString result = calculation(&ok);
-    if (ok) {
-        ui->display->setText(result);
-        operand = result;
-        operands.clear();
-        operands.push_back(operand);
-    } else {
-        ui->display->setText("错误");
-        operand = "0";
+
+void MainWindow::on_actionRedo_triggered()
+{
+    ui->textEdit->redo();
+}
+
+
+void MainWindow::on_textEdit_undoAvailable(bool b)
+{
+    ui->actionUndo->setEnabled(b);
+}
+
+
+void MainWindow::on_textEdit_copyAvailable(bool b)
+{
+    ui->actionCopy->setEnabled(b);
+    ui->actionCut->setEnabled(b);
+}
+
+
+void MainWindow::on_textEdit_redoAvailable(bool b)
+{
+    ui->actionRedo->setEnabled(b);
+}
+
+
+void MainWindow::on_actionFontColor_triggered()
+{
+    QColor color = QColorDialog::getColor(Qt::black, this, "选择颜色");
+    if(color.isValid()) {
+        ui->textEdit->setStyleSheet(QString("QPlainTextEdit {color: %1}").arg(color.name()));
     }
 }
+
+void MainWindow::on_actionEditorBackgroundColor_triggered()
+{
+    QColor color = QColorDialog::getColor(Qt::black, this, "选择颜色");
+    if(color.isValid()) {
+        ui->textEdit->setStyleSheet(QString("QPlainTextEdit {background-color: %1}").arg(color.name()));
+    }
+}
+
+void MainWindow::on_actionFontBackgroundColor_triggered()
+{
+
+}
+
+
+
+void MainWindow::on_actionLineWrap_triggered()
+{
+    QPlainTextEdit::LineWrapMode mode = ui->textEdit->lineWrapMode();
+
+    if( mode == QTextEdit::NoWrap ){
+        ui->textEdit->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+
+        ui->actionLineWrap->setChecked(true);
+    }else{
+        ui->textEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
+
+        ui->actionLineWrap->setChecked(false);
+    }
+}
+
+
+void MainWindow::on_actionFont_triggered()
+{
+    bool ok = false;
+    QFont font = QFontDialog::getFont(&ok, this);
+
+    if(ok)
+        ui->textEdit->setFont(font);
+}
+
+void MainWindow::on_actionToolbar_triggered()
+{
+    bool visible = ui->toolBar->isVisible();
+    ui->toolBar->setVisible(!visible);
+    ui->actionToolbar->setChecked(!visible);
+}
+
+void MainWindow::on_actionStatusbar_triggered()
+{
+    bool visible = ui->statusbar->isVisible();
+    ui->statusbar->setVisible(!visible);
+    ui->actionStatusbar->setChecked(!visible);
+}
+
+
+
+
+void MainWindow::on_actionSelectAll_triggered()
+{
+    ui->textEdit->selectAll();
+}
+
+
+void MainWindow::on_actionExit_triggered()
+{
+    if(uesrEditorConfirmed())
+        exit(0);
+}
+
+
+void MainWindow::on_textEdit_cursorPositionChanged()
+{
+    int col = 0;
+    int ln = 0;
+    int flg = -1;
+    int pos = ui->textEdit->textCursor().position();
+    QString text = ui->textEdit->toPlainText();
+
+    for(int i = 0; i < pos; i++){
+        if( text[i] == '\n' ){
+            ln ++;
+            flg = i;
+        }
+    }
+
+    flg ++;
+    col = pos - flg;
+    statusCursorLabel.setText("LN: " + QString::number(ln + 1) + "    Col: " +
+                              QString::number(col + 1));
+}
+
+
+void MainWindow::on_actionDisplayLineNumber_triggered(bool checked)
+{
+    ui->textEdit->hideLineNumberArea(checked);
+}
+

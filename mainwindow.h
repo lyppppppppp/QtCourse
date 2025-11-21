@@ -1,8 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
-#include <QLabel>
-#include <QStack>
+
 #include <QMainWindow>
+#include <QLabel>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -17,27 +17,71 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-    QString operand;
-    QString opcode;
-    QStack<QString> operands;
-    QStack<QString> opcodes;
-
-    QString calculation(bool * ok=NULL);
 
 private slots:
-    void btnNumClicked();
-    void btnBinaryOperatorClicked();
-    void btnUnaryOperatorClicked();
+    void on_actionAbout_triggered();
 
-    void on_btnPeriod_clicked();
+    void on_actionFind_triggered();
 
-    void on_btnDel_clicked();
+    void on_actionReplace_triggered();
 
-    void on_btnClear_clicked();
+    void on_actionNew_triggered();
 
-    void on_btnEqual_clicked();
+    void on_actionOpen_triggered();
+
+    void on_actionSave_triggered();
+
+    void on_actionSaveAs_triggered();
+
+    void on_textEdit_textChanged();
+
+    void on_actionUndo_triggered();
+
+    void on_actionCut_triggered();
+
+    void on_actionCopy_triggered();
+
+    void on_actionPaste_triggered();
+
+    void on_actionRedo_triggered();
+
+    void on_textEdit_undoAvailable(bool b);
+
+    void on_textEdit_copyAvailable(bool b);
+
+    void on_textEdit_redoAvailable(bool b);
+
+    void on_actionFontColor_triggered();
+
+    void on_actionFontBackgroundColor_triggered();
+
+    void on_actionEditorBackgroundColor_triggered();
+
+    void on_actionLineWrap_triggered();
+
+    void on_actionFont_triggered();
+
+    void on_actionStatusbar_triggered();
+
+    void on_actionToolbar_triggered();
+
+    void on_actionSelectAll_triggered();
+
+    void on_actionExit_triggered();
+
+    void on_textEdit_cursorPositionChanged();
+
+    void on_actionDisplayLineNumber_triggered(bool checked);
 
 private:
     Ui::MainWindow *ui;
+
+    QLabel statusCursorLabel;
+    QLabel statusLabel;
+
+    QString filePath;
+    bool textChanged;
+
+    bool uesrEditorConfirmed();
 };
 #endif // MAINWINDOW_H
